@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+body {
+    background: #003;
+}
+.arc {
+    fill: none;
+    stroke: #ff0000;
+    stroke-width: 1px;
+    stroke-opacity: 0.07;
+    stroke-linecap: round;
+}
+.land {
+    fill: #111;
+}
+</style>
+<svg width="1800" height="900"></svg>
+
+<script src="https://unpkg.com/d3@4.13.0/build/d3.min.js"></script>
+<script src="https://unpkg.com/d3-queue@3.0.7/build/d3-queue.min.js"></script>
+<script src="https://unpkg.com/d3-scale-chromatic@1.2.0/dist/d3-scale-chromatic.min.js"></script>
+<script src="https://unpkg.com/topojson@3.0.2/dist/topojson.min.js"></script>
+<script>
+let svg = d3.select('svg'),
+    width = +svg.attr('width'),
+    height = +svg.attr('height');
+
+let projection = d3.geoNaturalEarth1()
+    .translate([width / 2, height / 2]).
+    scale(width / 6);
+
+let path = d3.geoPath()
+    .projection(projection);
+
+d3.queue()
+    .defer(d3.json, 'ne_110m_land.json')
+    .defer(d3.json, 'big-sister-cities.json')
+    .await(ready);
+
+function ready(error, land, data) {
+    if (error) throw error;
+
+    let arcs = [];
+    let circles = [];
+    let min_degree, max_degree;
+    for (let cid in data.cities) {
+        let city = data.cities[cid];
+        let coords = [city.lon, city.lat];
+        circles.push({
+            'pop': city.pop,
+            'coords': coords,
+            'degree': city.degree,
+            'label': city.label
+        });
+    }
+    for (let [aid, bid] of data.sisters) {
+        arcs.push({'coords': [
+            [data.cities[aid].lon, data.cities[aid].lat],
+            [data.cities[bid].lon, data.cities[bid].lat],
+        ]});
+    }
+
+    let scale_degree = d3.scaleLinear()
+        .domain(d3.extent(circles, d => d.degree))
+        .range([2, 10]);
+
+    let scale_pop = d3.scaleOrdinal()
+        .domain(d3.extent(circles, d => d.pop))
+        .range(d3.schemeReds[9].reverse());
+
+    svg.append('g').attr('class', 'land')
+        .selectAll('path')
+        .data(topojson.feature(land, land.objects.ne_110m_land).features)
+        .enter().append('path')
+            .attr('d', path);
+
+    svg.append('g').attr('class', 'arcs')
+        .selectAll('path')
+        .data(arcs)
+        .enter().append('path')
+            .datum(d => ({type: 'LineString', coordinates: d.coords}))
+            .attr('class', 'arc')
+            .attr('d', path);
+
+    // Draw circles last so they are on top.
+    svg.append('g').attr('class', 'cities')
+        .selectAll('circle')
+        .data(circles)
+        .enter().append('circle')
+            .attr('cx', d => projection(d.coords)[0])
+            .attr('cy', d => projection(d.coords)[1])
+            .attr('fill', d => scale_pop(d.pop))
+            .attr('fill-opacity', 1)
+            .attr('r', d => scale_degree(d.degree))
+            .append('title').text(d => `${d.label} - ${d.pop}`);
+
+
+}
+</script>
