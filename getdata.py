@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import json
 
+import networkx as nx
 import wdutil
 
 from pathlib import Path
@@ -38,6 +39,13 @@ for record in resp['results']['bindings']:
     add_city(record, city_id, prefix='city')
     add_city(record, sister_id, prefix='sister')
 
-
 with open('big-sister-cities.json', 'w') as f:
     json.dump({'cities': cities, 'sisters': list(sisters)}, f)
+
+
+G = nx.Graph()
+for id, attr in cities.items():
+    G.add_node(id, **attr)
+for sister in sisters:
+    G.add_edge(sister[0], sister[1])
+nx.write_gexf(G, 'big-sister-cities.gexf')
